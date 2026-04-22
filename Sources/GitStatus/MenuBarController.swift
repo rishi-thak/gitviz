@@ -4,6 +4,7 @@ import AppKit
 protocol MenuBarControllerDelegate: AnyObject {
     func menuBarController(_ controller: MenuBarController, didSelectRepositoryWithID repositoryID: String)
     func menuBarControllerDidRequestRepositoryRefresh(_ controller: MenuBarController)
+    func menuBarControllerDidRequestFullDiff(_ controller: MenuBarController)
 }
 
 @MainActor
@@ -211,16 +212,7 @@ final class MenuBarController: NSObject {
 
     @objc
     private func showFullDiff() {
-        let alert = NSAlert()
-        alert.messageText = "Show Full Diff"
-        alert.informativeText = latestStatus.map {
-            "Stub action for \($0.branchName). Full diff UI is not implemented yet."
-        } ?? "Full diff UI is not implemented yet."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-
-        NSApp.activate(ignoringOtherApps: true)
-        alert.runModal()
+        delegate?.menuBarControllerDidRequestFullDiff(self)
     }
 
     @objc

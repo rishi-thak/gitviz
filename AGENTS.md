@@ -15,6 +15,8 @@
 - `swift build`: compile the package in debug mode.
 - `swift test`: run the Swift Testing suite.
 - `swift run`: launch the menu bar app from the current repository.
+- `./scripts/run_app.sh`: build the app bundle and open it.
+- `./scripts/install_command.sh`: install the `gitviz` shell command into `/opt/homebrew/bin`.
 
 Run `swift run` from the git repository you want to monitor, since the app resolves the working directory as the target repo.
 

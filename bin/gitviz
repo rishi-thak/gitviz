@@ -1,0 +1,7 @@
+#!/bin/zsh
+set -euo pipefail
+
+SCRIPT_PATH="${0:A}"
+ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+
+exec "$ROOT_DIR/scripts/run_app.sh"

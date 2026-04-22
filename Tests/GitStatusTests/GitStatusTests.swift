@@ -28,6 +28,34 @@ func discoveredRepositoryUsesReadableMenuTitle() {
     #expect(repository.displayPath == "~/Code/gitviz")
 }
 
+@Test
+func gitDiffReportIncludesStatSections() {
+    let snapshot = GitDiffSnapshot(
+        repositoryName: "gitviz",
+        repositoryPath: "/tmp/gitviz",
+        branchName: "main",
+        generatedAt: Date(timeIntervalSince1970: 0),
+        changeCounts: GitChangeCounts(stagedFiles: 2, unstagedFiles: 1, untrackedFiles: 3),
+        porcelainStatus: "M  README.md",
+        stagedShortStat: "1 file changed, 4 insertions(+)",
+        unstagedShortStat: "1 file changed, 2 deletions(-)",
+        stagedStat: "README.md | 4 ++++",
+        unstagedStat: "AppDelegate.swift | 2 --",
+        stagedPatch: "diff --git a/README.md b/README.md",
+        unstagedPatch: "diff --git a/AppDelegate.swift b/AppDelegate.swift"
+    )
+
+    let report = GitDiffReportRenderer.render(snapshot)
+
+    #expect(report.contains("Staged Summary (--shortstat)"))
+    #expect(report.contains("Unstaged Summary (--shortstat)"))
+    #expect(report.contains("Staged File Stats (--stat)"))
+    #expect(report.contains("Unstaged File Stats (--stat)"))
+    #expect(report.contains("Staged Patch"))
+    #expect(report.contains("Unstaged Patch"))
+    #expect(report.contains("Untracked files: 3"))
+}
+
 private func sampleStatus(isDirty: Bool, isStaged: Bool) -> GitStatus {
     GitStatus(
         branchName: "main",

@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
     private let menuBarController = MenuBarController()
     private var gitStatusMonitor: GitStatusMonitor?
     private var repositoryDiscoveryService: RepositoryDiscoveryService?
+    private var gitDiffWindowController: GitDiffWindowController?
     private var selectedRepository: DiscoveredRepository?
     private var discoveredRepositories: [DiscoveredRepository] = []
     private let launchDirectoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -73,6 +74,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
         repositoryDiscoveryService?.refreshNow()
     }
 
+    func menuBarControllerDidRequestFullDiff(_ controller: MenuBarController) {
+        guard let repository = selectedRepository else {
+            menuBarController.showNoRepositorySelected("No repository selected for diff")
+            return
+        }
+
+        showFullDiff(for: repository)
+    }
+
     private func handleRepositoryUpdate(_ repositories: [DiscoveredRepository], warning: String?) {
         discoveredRepositories = repositories
 
@@ -98,5 +108,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
         selectedRepository = repository
         gitStatusMonitor?.setRepository(repository.url)
         menuBarController.updateSelectedRepository(repository)
+    }
+
+    private func showFullDiff(for repository: DiscoveredRepository) {
+        let windowController = gitDiffWindowController ?? GitDiffWindowController()
+        gitDiffWindowController = windowController
+        windowController.onRefresh = { [weak self] in
+            guard let self, let repository = self.selectedRepository else { return }
+            self.showFullDiff(for: repository)
+        }
+        windowController.showLoading(for: repository)
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let snapshot = try GitCommand.diffSnapshot(for: repository.url)
+                await MainActor.run {
+                    guard
+                        let self,
+                        self.gitDiffWindowController?.displayingRepositoryID == repository.id
+                    else { return }
+
+                    self.gitDiffWindowController?.show(snapshot: snapshot, repositoryID: repository.id)
+                }
+            } catch {
+                await MainActor.run {
+                    guard
+                        let self,
+                        self.gitDiffWindowController?.displayingRepositoryID == repository.id
+                    else { return }
+
+                    self.gitDiffWindowController?.showError(error.localizedDescription, repository: repository)
+                }
+            }
+        }
     }
 }
