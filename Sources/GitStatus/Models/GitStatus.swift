@@ -7,6 +7,16 @@ struct GitStatus: Codable, Equatable, Sendable {
     let fileCount: Int
     let linesAdded: Int
     let linesRemoved: Int
+    let commitsAheadOfMain: Int?
+    let commitsBehindMain: Int?
+
+    var mainComparisonSummary: String {
+        guard let commitsAheadOfMain, let commitsBehindMain else {
+            return "vs main: unavailable"
+        }
+
+        return "vs main: ahead \(commitsAheadOfMain), behind \(commitsBehindMain)"
+    }
 
     enum CodingKeys: String, CodingKey {
         case branchName = "branch_name"
@@ -15,5 +25,7 @@ struct GitStatus: Codable, Equatable, Sendable {
         case fileCount = "file_count"
         case linesAdded = "lines_added"
         case linesRemoved = "lines_removed"
+        case commitsAheadOfMain = "commits_ahead_of_main"
+        case commitsBehindMain = "commits_behind_main"
     }
 }

@@ -84,11 +84,11 @@ final class MenuBarController: NSObject {
         menu.addItem(summaryItem)
         menu.addItem(selectedRepositoryItem)
         menu.addItem(.separator())
+        menu.addItem(diffItem)
+        menu.addItem(.separator())
         menu.addItem(repositoriesItem)
         menu.addItem(refreshRepositoriesItem)
         menu.addItem(discoveryWarningItem)
-        menu.addItem(.separator())
-        menu.addItem(diffItem)
         menu.addItem(.separator())
         menu.addItem(quitItem)
 
@@ -130,6 +130,8 @@ final class MenuBarController: NSObject {
         self.repositories = repositories
         if let selectedRepositoryID {
             selectedRepository = repositories.first(where: { $0.id == selectedRepositoryID }) ?? selectedRepository
+        } else {
+            selectedRepository = nil
         }
 
         discoveryWarningItem.title = discoveryWarning ?? ""
@@ -175,16 +177,16 @@ final class MenuBarController: NSObject {
 
     private func tooltipText(for status: GitStatus) -> String {
         let repositoryPath = selectedRepository?.displayPath ?? "No repository selected"
-        return "\(repositoryPath) | \(status.branchName) | files: \(status.fileCount) | +\(status.linesAdded) -\(status.linesRemoved)"
+        return "\(repositoryPath) | \(status.branchName) | \(status.mainComparisonSummary) | files: \(status.fileCount) | +\(status.linesAdded) -\(status.linesRemoved)"
     }
 
     private func statusSummary(for status: GitStatus) -> String {
         let prefix = selectedRepository.map { "\($0.name) | " } ?? ""
         if status.fileCount == 0 {
-            return "\(prefix)Branch: \(status.branchName) | Clean"
+            return "\(prefix)Branch: \(status.branchName) | \(status.mainComparisonSummary) | Clean"
         }
 
-        return "\(prefix)Branch: \(status.branchName) | files: \(status.fileCount) | +\(status.linesAdded) -\(status.linesRemoved)"
+        return "\(prefix)Branch: \(status.branchName) | \(status.mainComparisonSummary) | files: \(status.fileCount) | +\(status.linesAdded) -\(status.linesRemoved)"
     }
 
     private func rebuildRepositoriesMenu() {
@@ -231,3 +233,11 @@ final class MenuBarController: NSObject {
         NSApp.terminate(nil)
     }
 }
+
+#if DEBUG
+extension MenuBarController {
+    var selectedRepositoryIDForTesting: String? {
+        selectedRepository?.id
+    }
+}
+#endif

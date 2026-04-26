@@ -92,7 +92,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
             }
         } else if let firstRepository = repositories.first {
             selectRepository(firstRepository)
-        } else if selectedRepository == nil {
+        } else {
+            selectedRepository = nil
             menuBarController.showNoRepositorySelected("No git repositories found in Terminal or iTerm")
             gitStatusMonitor?.setRepository(nil)
         }

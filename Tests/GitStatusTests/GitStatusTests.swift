@@ -14,6 +14,33 @@ func menuBarFormattingReflectsGitState() {
 }
 
 @Test
+@MainActor
+func menuBarClearsSelectionWhenNoRepositoriesRemain() {
+    let controller = MenuBarController()
+    let repository = DiscoveredRepository(
+        path: "/tmp/gitviz",
+        name: "gitviz",
+        sourceLabels: ["Terminal"],
+        sessionCount: 1
+    )
+
+    controller.updateRepositories([repository], selectedRepositoryID: repository.id, discoveryWarning: nil)
+    #expect(controller.selectedRepositoryIDForTesting == repository.id)
+
+    controller.updateRepositories([], selectedRepositoryID: nil, discoveryWarning: nil)
+    #expect(controller.selectedRepositoryIDForTesting == nil)
+}
+
+@Test
+func gitStatusFormatsMainComparisonSummary() {
+    let comparedStatus = sampleStatus(isDirty: false, isStaged: false, commitsAheadOfMain: 3, commitsBehindMain: 1)
+    let unavailableStatus = sampleStatus(isDirty: false, isStaged: false)
+
+    #expect(comparedStatus.mainComparisonSummary == "vs main: ahead 3, behind 1")
+    #expect(unavailableStatus.mainComparisonSummary == "vs main: unavailable")
+}
+
+@Test
 func discoveredRepositoryUsesReadableMenuTitle() {
     let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
     let repository = DiscoveredRepository(
@@ -56,13 +83,20 @@ func gitDiffReportIncludesStatSections() {
     #expect(report.contains("Untracked files: 3"))
 }
 
-private func sampleStatus(isDirty: Bool, isStaged: Bool) -> GitStatus {
+private func sampleStatus(
+    isDirty: Bool,
+    isStaged: Bool,
+    commitsAheadOfMain: Int? = nil,
+    commitsBehindMain: Int? = nil
+) -> GitStatus {
     GitStatus(
         branchName: "main",
         isDirty: isDirty,
         isStaged: isStaged,
         fileCount: 0,
         linesAdded: 0,
-        linesRemoved: 0
+        linesRemoved: 0,
+        commitsAheadOfMain: commitsAheadOfMain,
+        commitsBehindMain: commitsBehindMain
     )
 }

@@ -214,6 +214,7 @@ final class GitStatusMonitor: @unchecked Sendable {
         let parsedStatus = parsePorcelainStatus(porcelain)
         let stagedTotals = parseDiffStat(stagedDiffStat)
         let unstagedTotals = parseDiffStat(unstagedDiffStat)
+        let mainComparison = fetchMainComparison(in: repositoryURL)
 
         return GitStatus(
             branchName: branchName,
@@ -221,8 +222,39 @@ final class GitStatusMonitor: @unchecked Sendable {
             isStaged: parsedStatus.isStaged,
             fileCount: parsedStatus.fileCount,
             linesAdded: stagedTotals.added + unstagedTotals.added,
-            linesRemoved: stagedTotals.removed + unstagedTotals.removed
+            linesRemoved: stagedTotals.removed + unstagedTotals.removed,
+            commitsAheadOfMain: mainComparison?.ahead,
+            commitsBehindMain: mainComparison?.behind
         )
+    }
+
+    private func fetchMainComparison(in repositoryURL: URL) -> (ahead: Int, behind: Int)? {
+        do {
+            _ = try GitCommand.run(
+                arguments: ["show-ref", "--verify", "--quiet", "refs/heads/main"],
+                in: repositoryURL
+            )
+        } catch {
+            return nil
+        }
+
+        guard let output = try? GitCommand.run(
+            arguments: ["rev-list", "--left-right", "--count", "main...HEAD"],
+            in: repositoryURL
+        ).trimmingCharacters(in: .whitespacesAndNewlines) else {
+            return nil
+        }
+
+        let parts = output.split(whereSeparator: \.isWhitespace)
+        guard
+            parts.count == 2,
+            let behind = Int(parts[0]),
+            let ahead = Int(parts[1])
+        else {
+            return nil
+        }
+
+        return (ahead: ahead, behind: behind)
     }
 
     private func parsePorcelainStatus(_ output: String) -> (isDirty: Bool, isStaged: Bool, fileCount: Int) {
