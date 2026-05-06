@@ -171,6 +171,7 @@ final class MenuBarController: NSObject, NSTextFieldDelegate {
         menu.addItem(.separator())
         menu.addItem(diffItem)
         menu.addItem(openInFinderItem)
+        menu.addItem(.separator())
         menu.addItem(commitPromptItem)
         menu.addItem(commitMessageItem)
         menu.addItem(addCommitPushItem)
