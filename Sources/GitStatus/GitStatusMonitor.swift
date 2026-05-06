@@ -15,6 +15,7 @@ final class GitStatusMonitor: @unchecked Sendable {
     private var refreshWorkItem: DispatchWorkItem?
     private var lastPublishedStatus: GitStatus?
     private var lastErrorMessage: String?
+    private var isRunning = false
 
     init(
         onStatusUpdate: @escaping @MainActor @Sendable (GitStatus) -> Void,
@@ -27,27 +28,30 @@ final class GitStatusMonitor: @unchecked Sendable {
     func start() {
         queue.async { [weak self] in
             guard let self else { return }
+            self.isRunning = true
             self.startFallbackTimerIfNeeded()
             self.rebindRepository()
         }
     }
 
     func stop() {
-        queue.sync {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.isRunning = false
             refreshWorkItem?.cancel()
             refreshWorkItem = nil
 
             fallbackTimer?.cancel()
             fallbackTimer = nil
 
-            watcherSources.forEach { $0.cancel() }
-            watcherSources.removeAll()
+            clearWatchers()
         }
     }
 
     func setRepository(_ repositoryURL: URL?) {
         queue.async { [weak self] in
             guard let self else { return }
+            guard self.isRunning else { return }
             self.repositoryURL = repositoryURL?.standardizedFileURL
             self.lastPublishedStatus = nil
             self.lastErrorMessage = nil
@@ -55,7 +59,16 @@ final class GitStatusMonitor: @unchecked Sendable {
         }
     }
 
+    func refreshNow() {
+        queue.async { [weak self] in
+            guard let self, self.isRunning else { return }
+            self.scheduleRefresh()
+        }
+    }
+
     private func rebindRepository() {
+        guard isRunning else { return }
+
         guard let repositoryURL else {
             gitDirectoryURL = nil
             clearWatchers()
@@ -145,6 +158,7 @@ final class GitStatusMonitor: @unchecked Sendable {
     }
 
     private func startFallbackTimerIfNeeded() {
+        guard isRunning else { return }
         guard fallbackTimer == nil else { return }
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -159,6 +173,7 @@ final class GitStatusMonitor: @unchecked Sendable {
     }
 
     private func scheduleRefresh() {
+        guard isRunning else { return }
         refreshWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
@@ -170,6 +185,7 @@ final class GitStatusMonitor: @unchecked Sendable {
     }
 
     private func refreshStatus() {
+        guard isRunning else { return }
         guard let repositoryURL else { return }
 
         do {
@@ -214,7 +230,7 @@ final class GitStatusMonitor: @unchecked Sendable {
         let parsedStatus = parsePorcelainStatus(porcelain)
         let stagedTotals = parseDiffStat(stagedDiffStat)
         let unstagedTotals = parseDiffStat(unstagedDiffStat)
-        let mainComparison = fetchMainComparison(in: repositoryURL)
+        let upstreamComparison = fetchUpstreamComparison(in: repositoryURL)
 
         return GitStatus(
             branchName: branchName,
@@ -223,23 +239,21 @@ final class GitStatusMonitor: @unchecked Sendable {
             fileCount: parsedStatus.fileCount,
             linesAdded: stagedTotals.added + unstagedTotals.added,
             linesRemoved: stagedTotals.removed + unstagedTotals.removed,
-            commitsAheadOfMain: mainComparison?.ahead,
-            commitsBehindMain: mainComparison?.behind
+            upstreamBranchName: upstreamComparison?.branchName,
+            upstreamRemoteName: upstreamComparison?.remoteName,
+            commitsAheadOfUpstream: upstreamComparison?.ahead,
+            commitsBehindUpstream: upstreamComparison?.behind
         )
     }
 
-    private func fetchMainComparison(in repositoryURL: URL) -> (ahead: Int, behind: Int)? {
-        do {
-            _ = try GitCommand.run(
-                arguments: ["show-ref", "--verify", "--quiet", "refs/heads/main"],
-                in: repositoryURL
-            )
-        } catch {
+    private func fetchUpstreamComparison(in repositoryURL: URL) -> (remoteName: String, branchName: String, ahead: Int, behind: Int)? {
+        guard let upstreamReference = try? GitCommand.upstreamReference(for: repositoryURL)
+        else {
             return nil
         }
 
         guard let output = try? GitCommand.run(
-            arguments: ["rev-list", "--left-right", "--count", "main...HEAD"],
+            arguments: ["rev-list", "--left-right", "--count", "\(upstreamReference.displayName)...HEAD"],
             in: repositoryURL
         ).trimmingCharacters(in: .whitespacesAndNewlines) else {
             return nil
@@ -254,7 +268,12 @@ final class GitStatusMonitor: @unchecked Sendable {
             return nil
         }
 
-        return (ahead: ahead, behind: behind)
+        return (
+            remoteName: upstreamReference.remoteName,
+            branchName: upstreamReference.displayName,
+            ahead: ahead,
+            behind: behind
+        )
     }
 
     private func parsePorcelainStatus(_ output: String) -> (isDirty: Bool, isStaged: Bool, fileCount: Int) {
@@ -314,6 +333,7 @@ final class GitStatusMonitor: @unchecked Sendable {
     }
 
     private func publish(status: GitStatus) {
+        guard isRunning else { return }
         guard lastPublishedStatus != status || lastErrorMessage != nil else { return }
 
         lastPublishedStatus = status
@@ -325,6 +345,7 @@ final class GitStatusMonitor: @unchecked Sendable {
     }
 
     private func publish(error message: String) {
+        guard isRunning else { return }
         guard lastErrorMessage != message else { return }
 
         lastPublishedStatus = nil

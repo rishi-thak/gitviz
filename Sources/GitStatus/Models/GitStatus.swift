@@ -7,15 +7,21 @@ struct GitStatus: Codable, Equatable, Sendable {
     let fileCount: Int
     let linesAdded: Int
     let linesRemoved: Int
-    let commitsAheadOfMain: Int?
-    let commitsBehindMain: Int?
+    let upstreamBranchName: String?
+    let upstreamRemoteName: String?
+    let commitsAheadOfUpstream: Int?
+    let commitsBehindUpstream: Int?
 
-    var mainComparisonSummary: String {
-        guard let commitsAheadOfMain, let commitsBehindMain else {
-            return "vs main: unavailable"
+    var upstreamComparisonSummary: String {
+        guard
+            let upstreamBranchName,
+            let commitsAheadOfUpstream,
+            let commitsBehindUpstream
+        else {
+            return "vs upstream: unavailable"
         }
 
-        return "vs main: ahead \(commitsAheadOfMain), behind \(commitsBehindMain)"
+        return "vs \(upstreamBranchName): ahead \(commitsAheadOfUpstream), behind \(commitsBehindUpstream)"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -25,7 +31,9 @@ struct GitStatus: Codable, Equatable, Sendable {
         case fileCount = "file_count"
         case linesAdded = "lines_added"
         case linesRemoved = "lines_removed"
-        case commitsAheadOfMain = "commits_ahead_of_main"
-        case commitsBehindMain = "commits_behind_main"
+        case upstreamBranchName = "upstream_branch_name"
+        case upstreamRemoteName = "upstream_remote_name"
+        case commitsAheadOfUpstream = "commits_ahead_of_upstream"
+        case commitsBehindUpstream = "commits_behind_upstream"
     }
 }

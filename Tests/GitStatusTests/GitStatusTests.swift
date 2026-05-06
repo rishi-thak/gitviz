@@ -32,12 +32,64 @@ func menuBarClearsSelectionWhenNoRepositoriesRemain() {
 }
 
 @Test
-func gitStatusFormatsMainComparisonSummary() {
-    let comparedStatus = sampleStatus(isDirty: false, isStaged: false, commitsAheadOfMain: 3, commitsBehindMain: 1)
+@MainActor
+func menuBarClearsStaleStatusWhenRepositorySelectionChanges() {
+    let controller = MenuBarController()
+    let firstRepository = DiscoveredRepository(
+        path: "/tmp/dirty-repo",
+        name: "dirty-repo",
+        sourceLabels: ["Terminal"],
+        sessionCount: 1
+    )
+    let secondRepository = DiscoveredRepository(
+        path: "/tmp/clean-repo",
+        name: "clean-repo",
+        sourceLabels: ["Terminal"],
+        sessionCount: 1
+    )
+
+    controller.updateSelectedRepository(firstRepository)
+    controller.update(with: sampleStatus(isDirty: true, isStaged: true))
+    #expect(controller.statusItemTitleForTesting == "main*+")
+
+    controller.updateSelectedRepository(secondRepository)
+
+    #expect(controller.statusItemTitleForTesting == "...")
+    #expect(controller.summaryTitleForTesting == "Loading git status for clean-repo...")
+    #expect(controller.refreshTitleForTesting == "Refreshing...")
+    #expect(controller.lastUpdatedTitleForTesting.contains("Last updated: "))
+}
+
+@Test
+func gitStatusFormatsUpstreamComparisonSummary() {
+    let comparedStatus = sampleStatus(
+        isDirty: false,
+        isStaged: false,
+        upstreamBranchName: "origin/develop",
+        upstreamRemoteName: "origin",
+        commitsAheadOfUpstream: 3,
+        commitsBehindUpstream: 1
+    )
     let unavailableStatus = sampleStatus(isDirty: false, isStaged: false)
 
-    #expect(comparedStatus.mainComparisonSummary == "vs main: ahead 3, behind 1")
-    #expect(unavailableStatus.mainComparisonSummary == "vs main: unavailable")
+    #expect(comparedStatus.upstreamComparisonSummary == "vs origin/develop: ahead 3, behind 1")
+    #expect(unavailableStatus.upstreamComparisonSummary == "vs upstream: unavailable")
+}
+
+@Test
+@MainActor
+func menuBarPullActionsUseLatestBranchNames() {
+    let controller = MenuBarController()
+
+    controller.update(with: sampleStatus(
+        isDirty: false,
+        isStaged: false,
+        upstreamBranchName: "origin/feature/test",
+        upstreamRemoteName: "origin"
+    ))
+
+    #expect(controller.pullUpstreamTitleForTesting == "Pull origin/feature/test")
+    #expect(controller.pullCurrentBranchTitleForTesting == "Pull main")
 }
 
 @Test
@@ -86,8 +138,10 @@ func gitDiffReportIncludesStatSections() {
 private func sampleStatus(
     isDirty: Bool,
     isStaged: Bool,
-    commitsAheadOfMain: Int? = nil,
-    commitsBehindMain: Int? = nil
+    upstreamBranchName: String? = nil,
+    upstreamRemoteName: String? = nil,
+    commitsAheadOfUpstream: Int? = nil,
+    commitsBehindUpstream: Int? = nil
 ) -> GitStatus {
     GitStatus(
         branchName: "main",
@@ -96,7 +150,9 @@ private func sampleStatus(
         fileCount: 0,
         linesAdded: 0,
         linesRemoved: 0,
-        commitsAheadOfMain: commitsAheadOfMain,
-        commitsBehindMain: commitsBehindMain
+        upstreamBranchName: upstreamBranchName,
+        upstreamRemoteName: upstreamRemoteName,
+        commitsAheadOfUpstream: commitsAheadOfUpstream,
+        commitsBehindUpstream: commitsBehindUpstream
     )
 }

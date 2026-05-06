@@ -70,8 +70,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
         selectRepository(repository)
     }
 
-    func menuBarControllerDidRequestRepositoryRefresh(_ controller: MenuBarController) {
+    func menuBarControllerDidRequestRefresh(_ controller: MenuBarController) {
         repositoryDiscoveryService?.refreshNow()
+        gitStatusMonitor?.refreshNow()
     }
 
     func menuBarControllerDidRequestFullDiff(_ controller: MenuBarController) {
@@ -81,6 +82,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
         }
 
         showFullDiff(for: repository)
+    }
+
+    func menuBarControllerDidRequestOpenInFinder(_ controller: MenuBarController) {
+        guard let repository = selectedRepository else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([repository.url])
+    }
+
+    func menuBarController(_ controller: MenuBarController, didRequestAddCommitPushWithMessage message: String) {
+        guard let repository = selectedRepository else { return }
+        runGitAction(
+            loadingMessage: "Running ACP for \(repository.name)..."
+        ) {
+            try GitCommand.addCommitPush(message: message, in: repository.url)
+        }
+    }
+
+    func menuBarControllerDidRequestPullUpstream(_ controller: MenuBarController) {
+        guard let repository = selectedRepository else { return }
+        runGitAction(
+            loadingMessage: "Pulling upstream for \(repository.name)..."
+        ) {
+            try GitCommand.pullUpstream(in: repository.url)
+        }
+    }
+
+    func menuBarControllerDidRequestPullCurrentBranch(_ controller: MenuBarController) {
+        guard let repository = selectedRepository else { return }
+        runGitAction(
+            loadingMessage: "Pulling current branch for \(repository.name)..."
+        ) {
+            try GitCommand.pullCurrentBranch(in: repository.url)
+        }
     }
 
     private func handleRepositoryUpdate(_ repositories: [DiscoveredRepository], warning: String?) {
@@ -139,6 +172,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
                     else { return }
 
                     self.gitDiffWindowController?.showError(error.localizedDescription, repository: repository)
+                }
+            }
+        }
+    }
+
+    private func runGitAction(
+        loadingMessage: String,
+        action: @escaping @Sendable () throws -> Void
+    ) {
+        menuBarController.showGitActionInProgress(loadingMessage)
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                try action()
+                await MainActor.run {
+                    guard let self else { return }
+                    self.menuBarController.clearCommitMessageInput()
+                    self.menuBarController.finishGitAction()
+                    self.menuBarController.showRefreshingStatus()
+                    self.gitStatusMonitor?.refreshNow()
+                    self.repositoryDiscoveryService?.refreshNow()
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self else { return }
+                    self.menuBarController.finishGitAction()
+                    self.menuBarController.showError(error.localizedDescription)
                 }
             }
         }

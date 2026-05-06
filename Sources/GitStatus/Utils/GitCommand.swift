@@ -1,6 +1,15 @@
 import Foundation
 
 enum GitCommand {
+    struct UpstreamReference: Equatable, Sendable {
+        let remoteName: String
+        let branchName: String
+
+        var displayName: String {
+            "\(remoteName)/\(branchName)"
+        }
+    }
+
     enum Error: LocalizedError {
         case executionFailed(command: String, status: Int32, stderr: String)
 
@@ -51,10 +60,7 @@ enum GitCommand {
     }
 
     static func diffSnapshot(for repositoryURL: URL) throws -> GitDiffSnapshot {
-        let branchName = try run(
-            arguments: ["rev-parse", "--abbrev-ref", "HEAD"],
-            in: repositoryURL
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        let branchName = try currentBranchName(in: repositoryURL)
 
         let porcelainStatus = try run(
             arguments: ["status", "--porcelain"],
@@ -102,6 +108,58 @@ enum GitCommand {
             stagedPatch: stagedPatch,
             unstagedPatch: unstagedPatch
         )
+    }
+
+    static func currentBranchName(in repositoryURL: URL) throws -> String {
+        try run(
+            arguments: ["rev-parse", "--abbrev-ref", "HEAD"],
+            in: repositoryURL
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func upstreamReference(for repositoryURL: URL) throws -> UpstreamReference? {
+        let upstreamName = try run(
+            arguments: ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+            in: repositoryURL
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !upstreamName.isEmpty else { return nil }
+
+        let parts = upstreamName.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else {
+            throw Error.executionFailed(
+                command: "git rev-parse --abbrev-ref --symbolic-full-name @{upstream}",
+                status: 1,
+                stderr: "Unexpected upstream format: \(upstreamName)"
+            )
+        }
+
+        return UpstreamReference(remoteName: parts[0], branchName: parts[1])
+    }
+
+    static func addCommitPush(message: String, in repositoryURL: URL) throws {
+        try run(arguments: ["add", "."], in: repositoryURL)
+        try run(arguments: ["commit", "-m", message], in: repositoryURL)
+        let currentBranch = try currentBranchName(in: repositoryURL)
+        try run(arguments: ["push", "origin", currentBranch], in: repositoryURL)
+    }
+
+    static func pullUpstream(in repositoryURL: URL) throws {
+        guard let upstream = try upstreamReference(for: repositoryURL) else {
+            throw Error.executionFailed(
+                command: "git pull @{upstream}",
+                status: 1,
+                stderr: "No upstream branch configured"
+            )
+        }
+
+        try run(arguments: ["pull", upstream.remoteName, upstream.branchName], in: repositoryURL)
+    }
+
+    static func pullCurrentBranch(in repositoryURL: URL) throws {
+        let currentBranch = try currentBranchName(in: repositoryURL)
+        let remoteName = (try? upstreamReference(for: repositoryURL)?.remoteName) ?? "origin"
+        try run(arguments: ["pull", remoteName, currentBranch], in: repositoryURL)
     }
 
     private static func parseChangeCounts(from porcelainStatus: String) -> GitChangeCounts {

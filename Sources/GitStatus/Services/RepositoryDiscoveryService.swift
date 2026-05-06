@@ -74,6 +74,7 @@ final class RepositoryDiscoveryService: @unchecked Sendable {
     private var timer: DispatchSourceTimer?
     private var lastRepositories: [DiscoveredRepository] = []
     private var lastWarning: String?
+    private var isRunning = false
 
     init(
         launchDirectoryURL: URL,
@@ -86,13 +87,16 @@ final class RepositoryDiscoveryService: @unchecked Sendable {
     func start() {
         queue.async { [weak self] in
             guard let self else { return }
+            self.isRunning = true
             self.refresh()
             self.startTimerIfNeeded()
         }
     }
 
     func stop() {
-        queue.sync {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.isRunning = false
             timer?.cancel()
             timer = nil
         }
@@ -100,11 +104,13 @@ final class RepositoryDiscoveryService: @unchecked Sendable {
 
     func refreshNow() {
         queue.async { [weak self] in
-            self?.refresh()
+            guard let self, self.isRunning else { return }
+            self.refresh()
         }
     }
 
     private func startTimerIfNeeded() {
+        guard isRunning else { return }
         guard timer == nil else { return }
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -117,6 +123,7 @@ final class RepositoryDiscoveryService: @unchecked Sendable {
     }
 
     private func refresh() {
+        guard isRunning else { return }
         var repositoriesByPath: [String: RepositoryAccumulator] = [:]
         var warnings: [String] = []
 
