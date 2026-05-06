@@ -93,6 +93,27 @@ func menuBarPullActionsUseLatestBranchNames() {
 }
 
 @Test
+@MainActor
+func refreshCompletionClearsRefreshingStateWithoutChangingStatus() {
+    let controller = MenuBarController()
+    let repository = DiscoveredRepository(
+        path: "/tmp/gitviz",
+        name: "gitviz",
+        sourceLabels: ["Terminal"],
+        sessionCount: 1
+    )
+
+    controller.updateSelectedRepository(repository)
+    controller.update(with: sampleStatus(isDirty: false, isStaged: false))
+    controller.showRefreshingStatus()
+    controller.finishRefreshing()
+
+    #expect(controller.refreshTitleForTesting == "Refresh Now")
+    #expect(controller.summaryTitleForTesting == "gitviz | Branch: main | vs upstream: unavailable | Clean")
+    #expect(controller.lastUpdatedTitleForTesting.contains("Last updated: "))
+}
+
+@Test
 func discoveredRepositoryUsesReadableMenuTitle() {
     let homeDirectory = FileManager.default.homeDirectoryForCurrentUser.path
     let repository = DiscoveredRepository(

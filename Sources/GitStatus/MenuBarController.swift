@@ -272,6 +272,15 @@ final class MenuBarController: NSObject, NSTextFieldDelegate {
         updateRefreshUI()
     }
 
+    func finishRefreshing() {
+        isRefreshing = false
+        lastUpdatedAt = Date()
+        if let latestStatus {
+            summaryItem.title = statusSummary(for: latestStatus)
+        }
+        updateRefreshUI()
+    }
+
     func showGitActionInProgress(_ message: String) {
         isGitActionRunning = true
         summaryItem.title = message

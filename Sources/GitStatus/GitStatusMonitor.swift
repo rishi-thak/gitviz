@@ -5,6 +5,7 @@ import Foundation
 final class GitStatusMonitor: @unchecked Sendable {
     private let onStatusUpdate: @MainActor @Sendable (GitStatus) -> Void
     private let onError: @MainActor @Sendable (String) -> Void
+    private let onRefreshFinished: @MainActor @Sendable () -> Void
     private let fileManager = FileManager.default
     private let queue = DispatchQueue(label: "GitStatusMonitor.queue", qos: .utility)
 
@@ -19,10 +20,12 @@ final class GitStatusMonitor: @unchecked Sendable {
 
     init(
         onStatusUpdate: @escaping @MainActor @Sendable (GitStatus) -> Void,
-        onError: @escaping @MainActor @Sendable (String) -> Void
+        onError: @escaping @MainActor @Sendable (String) -> Void,
+        onRefreshFinished: @escaping @MainActor @Sendable () -> Void
     ) {
         self.onStatusUpdate = onStatusUpdate
         self.onError = onError
+        self.onRefreshFinished = onRefreshFinished
     }
 
     func start() {
@@ -187,6 +190,14 @@ final class GitStatusMonitor: @unchecked Sendable {
     private func refreshStatus() {
         guard isRunning else { return }
         guard let repositoryURL else { return }
+
+        defer {
+            if isRunning {
+                Task { @MainActor [onRefreshFinished] in
+                    onRefreshFinished()
+                }
+            }
+        }
 
         do {
             let status = try fetchStatus(in: repositoryURL)

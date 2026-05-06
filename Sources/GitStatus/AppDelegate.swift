@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, MenuBarControllerDeleg
             },
             onError: { [weak self] message in
                 self?.menuBarController.showError(message)
+            },
+            onRefreshFinished: { [weak self] in
+                self?.menuBarController.finishRefreshing()
             }
         )
         gitStatusMonitor?.start()
