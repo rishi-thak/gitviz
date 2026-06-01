@@ -165,7 +165,7 @@ final class GitStatusMonitor: @unchecked Sendable {
         guard fallbackTimer == nil else { return }
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 1, repeating: 1)
+        timer.schedule(deadline: .now() + 30, repeating: 30)
         timer.setEventHandler { [weak self] in
             guard let self, self.repositoryURL != nil else { return }
             self.scheduleRefresh()
@@ -228,19 +228,19 @@ final class GitStatusMonitor: @unchecked Sendable {
             in: repositoryURL
         )
 
-        let stagedDiffStat = try GitCommand.run(
-            arguments: ["diff", "--stat", "--cached"],
+        let stagedNumstat = try GitCommand.run(
+            arguments: ["diff", "--numstat", "--cached"],
             in: repositoryURL
         )
 
-        let unstagedDiffStat = try GitCommand.run(
-            arguments: ["diff", "--stat"],
+        let unstagedNumstat = try GitCommand.run(
+            arguments: ["diff", "--numstat"],
             in: repositoryURL
         )
 
         let parsedStatus = parsePorcelainStatus(porcelain)
-        let stagedTotals = parseDiffStat(stagedDiffStat)
-        let unstagedTotals = parseDiffStat(unstagedDiffStat)
+        let stagedTotals = parseNumstat(stagedNumstat)
+        let unstagedTotals = parseNumstat(unstagedNumstat)
         let upstreamComparison = fetchUpstreamComparison(in: repositoryURL)
 
         return GitStatus(
@@ -313,34 +313,16 @@ final class GitStatusMonitor: @unchecked Sendable {
         return (isDirty, isStaged, fileCount)
     }
 
-    private func parseDiffStat(_ output: String) -> (added: Int, removed: Int) {
-        guard let summaryLine = output
-            .split(whereSeparator: \.isNewline)
-            .last
-            .map(String.init)
-        else {
-            return (0, 0)
+    private func parseNumstat(_ output: String) -> (added: Int, removed: Int) {
+        var added = 0
+        var removed = 0
+        for line in output.split(whereSeparator: \.isNewline) {
+            let parts = line.split(separator: "\t", maxSplits: 2)
+            guard parts.count >= 2 else { continue }
+            added += Int(parts[0]) ?? 0
+            removed += Int(parts[1]) ?? 0
         }
-
-        return (
-            added: extractCount(matching: #"(\d+)\sinsertions?\(\+\)"#, in: summaryLine),
-            removed: extractCount(matching: #"(\d+)\sdeletions?\(-\)"#, in: summaryLine)
-        )
-    }
-
-    private func extractCount(matching pattern: String, in summaryLine: String) -> Int {
-        guard
-            let regularExpression = try? NSRegularExpression(pattern: pattern),
-            let match = regularExpression.firstMatch(
-                in: summaryLine,
-                range: NSRange(summaryLine.startIndex..., in: summaryLine)
-            ),
-            let range = Range(match.range(at: 1), in: summaryLine)
-        else {
-            return 0
-        }
-
-        return Int(summaryLine[range]) ?? 0
+        return (added, removed)
     }
 
     private func publish(status: GitStatus) {

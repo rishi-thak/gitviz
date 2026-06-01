@@ -25,8 +25,8 @@ enum GitCommand {
     @discardableResult
     static func run(arguments: [String], in directoryURL: URL) throws -> String {
         let result = try ProcessRunner.run(
-            executablePath: "/usr/bin/env",
-            arguments: ["git"] + arguments,
+            executablePath: "/usr/bin/git",
+            arguments: arguments,
             currentDirectoryURL: directoryURL
         )
 
@@ -43,8 +43,8 @@ enum GitCommand {
 
     static func repositoryRoot(for directoryURL: URL) throws -> URL {
         let result = try ProcessRunner.run(
-            executablePath: "/usr/bin/env",
-            arguments: ["git", "-C", directoryURL.path, "rev-parse", "--show-toplevel"]
+            executablePath: "/usr/bin/git",
+            arguments: ["-C", directoryURL.path, "rev-parse", "--show-toplevel"]
         )
 
         guard result.terminationStatus == 0 else {

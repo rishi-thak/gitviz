@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Dispatch
 import Foundation
 
@@ -114,7 +115,7 @@ final class RepositoryDiscoveryService: @unchecked Sendable {
         guard timer == nil else { return }
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 2, repeating: 2)
+        timer.schedule(deadline: .now() + 10, repeating: 10)
         timer.setEventHandler { [weak self] in
             self?.refresh()
         }
@@ -222,18 +223,14 @@ final class RepositoryDiscoveryService: @unchecked Sendable {
     }
 
     private func currentWorkingDirectory(forProcessID processID: Int32) -> URL? {
-        guard let result = try? ProcessRunner.run(
-            executablePath: "/usr/sbin/lsof",
-            arguments: ["-a", "-p", "\(processID)", "-d", "cwd", "-Fn"]
-        ) else {
-            return nil
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        let ret = proc_pidinfo(processID, PROC_PIDVNODEPATHINFO, 0, &info, size)
+        guard ret == size else { return nil }
+        let path = withUnsafeBytes(of: &info.pvi_cdir.vip_path) { buf -> String? in
+            guard let base = buf.baseAddress else { return nil }
+            return String(cString: base.assumingMemoryBound(to: CChar.self))
         }
-
-        let path = result.stdout
-            .split(whereSeparator: \.isNewline)
-            .first(where: { $0.hasPrefix("n") })
-            .map { String($0.dropFirst()) }
-
         guard let path, !path.isEmpty else { return nil }
         return URL(fileURLWithPath: path).standardizedFileURL
     }
